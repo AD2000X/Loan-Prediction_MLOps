@@ -1,0 +1,358 @@
+name: MLOps CI/CD Pipeline v2.0 - Production Grade
+
+on:
+  push:
+    branches: [ main, develop, ci-verification ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '**/*.md'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.gif'
+      - '**/*.pdf'
+      - '**/*.html'
+      - 'grafana/**'
+      - 'prometheus/**'
+      - 'monitoring/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  ECR_REPOSITORY: mlops/loan_pred
+  S3_BUCKET: loanpred-mlops-20251118-120330
+  PYTHON_VERSION: '3.11'
+  MIN_F1_SCORE: '0.85'
+  MIN_ACCURACY: '0.80'
+  MIN_RECALL: '0.80'
+
+jobs:
+  # ============================================
+  # Job 1: Model Training & Validation
+  # ============================================
+  model-training:
+    name: Train & Validate Models
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+
+    outputs:
+      model_trained: ${{ steps.training.outputs.trained }}
+      f1_score: ${{ steps.validate-metrics.outputs.f1_score }}
+      model_version: ${{ steps.training.outputs.version }}
+      quality_passed: ${{ steps.quality-gate.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install DVC and dependencies
+        run: |
+          pip install dvc[s3]==3.48.0
+          dvc remote modify myremote region ${{ env.AWS_REGION }}
+          dvc pull -v || echo "No remote data, using local datasets from repo"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          pytest test/test_mlops.py -v --tb=short
+
+      - name: Sync Model Registry from S3 before training
+        run: |
+          echo "Syncing existing Model Registry from S3..."
+          # Only sync the models directory to preserve version history
+          aws s3 sync s3://${{ env.S3_BUCKET }}/mlruns/models/ ./mlruns/models/ || echo "No existing Model Registry in S3"
+          echo "Model Registry synced successfully"
+
+      - name: Train models with MLflow
+        id: training
+        env:
+          MLFLOW_TRACKING_URI: ./mlruns
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          echo "========================================="
+          echo "Training models with local tracking, S3 artifacts"
+          echo "========================================="
+          echo "Working directory: $(pwd)"
+          echo "MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+
+          # Ensure mlruns directory exists with write permissions
+          mkdir -p mlruns
+          chmod -R 755 mlruns
+
+          # Run training
+          python -m prediction_model.training_pipeline
+
+          # Debug: Check if runs were created
+          echo ""
+          echo "Checking MLflow runs directory..."
+          ls -la mlruns/ || echo "mlruns directory not found"
+
+          # Verify runs were created
+          python -c "
+          import mlflow
+          import os
+          mlflow.set_tracking_uri('./mlruns')
+          experiments = mlflow.search_experiments()
+          print(f'Found {len(experiments)} experiments:')
+          for exp in experiments:
+              runs = mlflow.search_runs(experiment_ids=[exp.experiment_id], max_results=1)
+              print(f'  - {exp.name}: {len(runs)} runs')
+          "
+          echo "trained=true" >> $GITHUB_OUTPUT
+
+          # Extract model version from MLflow
+          VERSION=$(python -c "import mlflow; mlflow.set_tracking_uri('./mlruns'); client = mlflow.tracking.MlflowClient(); versions = client.get_latest_versions('LoanPrediction', stages=['Production']); print(versions[0].version if versions else '1')")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Model version: $VERSION"
+
+      - name: Sync MLflow runs to S3
+        run: |
+          echo "Syncing MLflow tracking data and artifacts to S3..."
+          aws s3 sync mlruns/ s3://${{ env.S3_BUCKET }}/mlruns/ --delete
+          echo "MLflow data synced to S3"
+
+      - name: Push datasets to S3 via DVC
+        run: |
+          echo "Pushing datasets to S3..."
+          dvc push -v || echo "DVC push completed with warnings"
+          echo "Datasets uploaded to S3"
+
+      - name: Validate model metrics
+        id: validate-metrics
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          echo "Extracting model metrics from MLflow..."
+          python .github/scripts/validate_metrics.py
+
+      - name: Quality Gate - Model Performance
+        id: quality-gate
+        run: |
+          F1_SCORE="${{ steps.validate-metrics.outputs.f1_score }}"
+
+          echo "========================================="
+          echo "Quality Gate: Model Performance"
+          echo "========================================="
+          echo "F1 Score: $F1_SCORE"
+          echo "Threshold: ${{ env.MIN_F1_SCORE }}"
+
+          # Compare using bc
+          if (( $(echo "$F1_SCORE >= ${{ env.MIN_F1_SCORE }}" | bc -l) )); then
+            echo "PASSED - Model meets quality threshold"
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "FAILED - Model below quality threshold"
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-metrics
+          path: |
+            model_metrics.json
+          retention-days: 90
+
+  # ============================================
+  # Job 3: Docker Build & Push
+  # ============================================
+  docker-build:
+    name: Build & Push Docker Image
+    needs: model-training
+    if: needs.model-training.outputs.quality_passed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Image tag: $IMAGE_TAG"
+
+      - name: Build Docker image (S3-based model loading)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          echo "Building Docker image (models loaded from S3 at runtime)..."
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+
+          # Show image size
+          docker images | grep $ECR_REPOSITORY
+
+      - name: Push to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "Pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+
+  # ============================================
+  # Job 3: Deploy to EKS with Rolling Update
+  # ============================================
+  deploy:
+    name: Deploy to EKS
+    needs: [model-training, docker-build]
+    if: needs.model-training.outputs.quality_passed == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          echo "kubectl installed successfully"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          echo "kubeconfig updated for cluster: ${{ env.EKS_CLUSTER_NAME }}"
+
+      - name: Cleanup old blue-green deployments
+        continue-on-error: true
+        run: |
+          echo "Cleaning up old blue-green deployments to free resources..."
+
+          kubectl delete deployment loan-prediction-blue -n loan-prediction-mlops --ignore-not-found=true
+          kubectl delete deployment loan-prediction-green -n loan-prediction-mlops --ignore-not-found=true
+
+          kubectl delete service loan-prediction-blue-internal -n loan-prediction-mlops --ignore-not-found=true
+          kubectl delete service loan-prediction-green-internal -n loan-prediction-mlops --ignore-not-found=true
+
+          kubectl delete pods -n loan-prediction-mlops --field-selector=status.phase=Failed --ignore-not-found=true
+
+          echo "Cleanup complete"
+
+      - name: Apply Kubernetes manifests
+        run: |
+          echo "Applying base infrastructure..."
+          kubectl apply -f k8s/namespace.yml
+          kubectl apply -f k8s/serviceaccount.yml
+
+          echo "Applying application manifests..."
+          kubectl apply -f k8s/deployment.yml
+          kubectl apply -f k8s/services.yml
+
+          echo "Manifests applied successfully"
+
+      - name: Rolling update deployment
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          IMAGE_TAG: ${{ needs.docker-build.outputs.image_tag }}
+        run: |
+          echo "Starting rolling update with image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          kubectl set image deployment/loan-prediction-deployment \
+            loan-prediction=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -n loan-prediction-mlops
+
+          echo "Rolling update triggered, waiting for completion..."
+
+          if ! kubectl rollout status deployment/loan-prediction-deployment \
+            -n loan-prediction-mlops --timeout=5m; then
+            echo "ERROR: Rollout failed or timed out"
+            kubectl get pods -n loan-prediction-mlops -l app=loan-prediction
+            kubectl describe deployment loan-prediction-deployment -n loan-prediction-mlops
+            exit 1
+          fi
+
+          echo "Rolling update completed successfully"
+
+      - name: Verify deployment health
+        run: |
+          echo "Verifying pod status..."
+          kubectl get pods -n loan-prediction-mlops -l app=loan-prediction
+
+          RUNNING_PODS=$(kubectl get pods -n loan-prediction-mlops \
+            -l app=loan-prediction \
+            --field-selector=status.phase=Running \
+            --no-headers | wc -l)
+
+          if [ "$RUNNING_PODS" -lt 3 ]; then
+            echo "ERROR: Expected 3 running pods, found: $RUNNING_PODS"
+            exit 1
+          fi
+
+          echo "Found $RUNNING_PODS running pods"
+
+          echo "Running in-cluster health check..."
+          POD=$(kubectl get pod -l app=loan-prediction -n loan-prediction-mlops \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          if ! kubectl exec $POD -n loan-prediction-mlops -- \
+            curl -f http://localhost:8005/health; then
+            echo "ERROR: Health check failed"
+            kubectl logs $POD -n loan-prediction-mlops --tail=50
+            exit 1
+          fi
+
+          echo "Deployment verification successful"
+
+      - name: Display deployment info
+        run: |
+          echo "=== Deployment Summary ==="
+          kubectl get deployment loan-prediction-deployment -n loan-prediction-mlops
+          kubectl get pods -n loan-prediction-mlops -l app=loan-prediction
+          kubectl get service loan-prediction-service -n loan-prediction-mlops
+          echo "=========================="

@@ -1,0 +1,101 @@
+# DVC metadata (keep control files)
+!.dvc/
+!datasets.dvc
+!/datasets/*.dvc
+
+# Data tracked by DVC (ignore raw copies)
+datasets/*
+!datasets/.gitignore
+!/datasets/*.dvc
+
+# Environments & secrets
+venv/
+env/
+.env
+.env.*
+*.pem
+*.key
+*.crt
+kubeconfig
+
+# Python / build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.cache/
+htmlcov/
+.coverage
+coverage.xml
+dist/
+build/
+tmp/
+cache/
+*.log
+*.lock
+*.tar
+*.egg-info/
+
+# DVC cache and temp
+.dvc/cache/
+.dvc/tmp/
+data/cache/
+
+# MLflow artifacts
+mlruns/
+mlflow.db
+shap_summary_*.png
+
+# Drift monitoring generated files
+drift_monitoring/*.html
+drift_monitoring/drift_report*.html
+drift_monitoring/latest_batch.csv
+
+# Report directory (temporary HTML files)
+report/
+
+# Monitoring data (Docker volumes)
+monitoring/prometheus_data/
+monitoring/grafana_data/
+
+# Model artifacts (tracked by MLflow)
+prediction_model/trained_models/*
+!prediction_model/trained_models/.gitkeep
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker & infra scratch files
+.dockerignore.dockerfile
+docker-compose.override.yml
+*.dockertar
+
+# Terraform state
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# AWS
+.aws/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage reports
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+/datasets

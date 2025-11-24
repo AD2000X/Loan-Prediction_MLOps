@@ -1,0 +1,71 @@
+name: Documentation Integrity
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - '**/*.md'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.gif'
+      - '**/*.pdf'
+      - 'grafana/**'
+      - 'prometheus/**'
+      - 'monitoring/**'
+      - 'k8s/**/*.md'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - '**/*.md'
+      - '**/*.pdf'
+      - 'grafana/**'
+      - 'prometheus/**'
+      - 'monitoring/**'
+      - 'k8s/**/*.md'
+  workflow_dispatch:
+
+jobs:
+  lint-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Enforce required infra docs
+      run: |
+        missing=0
+        for f in docs/infra/s3.md docs/infra/ecr.md docs/infra/eks.md docs/infra/grafana.md docs/infra/prometheus.md; do
+          if [ ! -f "$f" ]; then
+            echo "::error::Missing required documentation: $f"
+            missing=1
+          fi
+        done
+        exit $missing
+
+    - name: Install linters
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq yamllint
+
+    - name: Validate referenced images exist
+      run: |
+        for img in $(grep -rohE "!\[[^]]*\]\(([^)]+)\)" docs monitoring | sed -E 's/.*\(([^)]+)\).*/\1/'); do
+          if [ ! -f "$img" ]; then
+            echo "::error::Broken image reference: $img"
+            exit 1
+          fi
+        done || true
+
+    - name: Check Grafana & Prometheus configs
+      run: |
+        test -d grafana && find grafana -name '*.json' -exec jq empty {} \;
+        test -d prometheus && find prometheus -name '*.yml' -o -name '*.yaml' | xargs -r yamllint
+
+    - name: Summarize changes
+      run: |
+        echo "## Doc files touched" >> $GITHUB_STEP_SUMMARY
+        git diff --name-only ${{ github.sha }}^ ${{ github.sha }} | grep -E '\.(md|png|jpg|gif|json|yaml)$' >> $GITHUB_STEP_SUMMARY || echo "No doc files changed" >> $GITHUB_STEP_SUMMARY
+        echo "Doc check finished; training pipeline not triggered." >> $GITHUB_STEP_SUMMARY

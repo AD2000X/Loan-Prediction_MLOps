@@ -1,0 +1,6 @@
+[core]
+    remote = myremote
+['remote "myremote"']
+    url = s3://loanpred-mlops-20251118-120330
+    region = eu-west-2
+    endpointurl = https://s3.eu-west-2.amazonaws.com

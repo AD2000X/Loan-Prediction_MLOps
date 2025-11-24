@@ -1,0 +1,46 @@
+# Python/venv
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+
+# VCS / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# DVC / MLflow / data / reports
+.dvc/
+*.dvc
+.dvcignore
+mlruns/
+datasets/
+drift_monitoring/
+*.html
+*.ipynb
+notebooks/
+
+# build artifacts / logs
+dist/
+build/
+*.log
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Reports and artifacts
+report/
+drift_monitoring/drift_report_temp.html
+
+# Update
+docs/
+test/
+k8s/
+grafana/
+prometheus/
+monitoring/
