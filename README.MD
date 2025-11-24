@@ -39,7 +39,7 @@ Loan-Prediction_MLOps/
 - Python 3.11+
 - pip
 - Docker + Docker Compose (for monitoring)
-- AWS CLI with access to the S3 bucket `<your S3_BUCKET_NAME>` (for data/artifacts)
+- AWS CLI with access to the S3 bucket (`loanpred-mlops-20251118-120330` by default) for data/artifacts
 - DVC with S3 support: `pip install dvc[s3]`
 
 ## Setup
@@ -69,10 +69,10 @@ cp .env.example .env
 # MLFLOW_TRACKING_URI=./mlruns          # File-based MLflow tracking by default
 # MODEL_STAGE=Production                # Which stage the API serves
 # API_PORT=8005
-# AWS_REGION=<your AWS_REGION>
-# S3_BUCKET_NAME=<your S3_BUCKET_NAME>
-# DVC_REMOTE=<s3://your S3_BUCKET_NAME-your-unique-id/datasets>
-# DRIFT_S3_BUCKET=<your S3_BUCKET_NAME-your-unique-id>
+# AWS_REGION=eu-west-2
+# S3_BUCKET_NAME=loanpred-mlops-20251118-120330   # default in configs/DVC/Dockerfile
+# DVC_REMOTE=s3://loanpred-mlops-20251118-120330/datasets
+# DRIFT_S3_BUCKET=loanpred-mlops-20251118-120330
 ```
 
 4) Pull datasets with DVC (requires AWS credentials)
@@ -80,11 +80,11 @@ cp .env.example .env
 aws configure                           # Ensure access to <your AWS_REGION>
 dvc pull                                # Uses remote 'myremote' from .dvc/config
 ```
-The default DVC remote points to `<your S3_BUCKET_NAME>`.
+The default DVC remote points to `s3://loanpred-mlops-20251118-120330`.
 
 5) (Optional) Download existing MLflow runs/models
 ```bash
-aws s3 sync s3://<your S3_BUCKET_NAME>/mlruns/ ./mlruns/
+aws s3 sync s3://loanpred-mlops-20251118-120330/mlruns/ ./mlruns/
 ```
 
 ## Model Training
@@ -93,9 +93,9 @@ Train models and log to MLflow (experiment `loan_prediction_model`):
 ```bash
 python -m prediction_model.training_pipeline
 ```
-- Reads data from `datasets/train.csv` and `datasets/test.csv` (DVC-managed).
+- Reads data from `datasets/train.csv` and `datasets/test.csv` (tracked by DVC).
 - Logs metrics, SHAP plots, and models to `./mlruns` (or the URI in `MLFLOW_TRACKING_URI`).
-- S3 bucket used for artifacts by default: `<your S3_BUCKET_NAME>` (see `prediction_model/config/config.py`).
+- S3 bucket used for artifacts by default: `loanpred-mlops-20251118-120330` (see `prediction_model/config/config.py`).
 
 ## Run the API
 
@@ -164,7 +164,7 @@ curl "http://localhost:8005/model_info?stage=Production"
 ## Data and Artifact Management
 
 - Datasets are tracked via DVC (`datasets.dvc`). Remote `myremote` is defined in `.dvc/config`:
-  - URL: `s3://<your S3_BUCKET_NAME>`
+  - URL: `s3://loanpred-mlops-20251118-120330`
   - Region: `eu-west-2`
 - Common commands:
   ```bash
@@ -172,7 +172,7 @@ curl "http://localhost:8005/model_info?stage=Production"
   dvc add datasets/   # track updated data
   dvc push            # push data to S3
   ```
-- MLflow artifacts: default bucket `<your S3_BUCKET_NAME>` (Docker startup script syncs `mlruns/` from there).
+- MLflow artifacts: default bucket `loanpred-mlops-20251118-120330` (Docker startup script syncs `mlruns/` from there).
 
 ## Docker and Deployment
 
@@ -196,8 +196,8 @@ curl "http://localhost:8005/model_info?stage=Production"
 
 Tests live in `tests/`:
 - Unit/API tests target the FastAPI app and prediction helpers.
-- Integration tests are guarded by a `--run-integration` flag in the test files; the flag is not currently defined via `pytest_addoption`, so you need to add that option or adjust the skip logic before running pytest with the current codebase.
-- After adding the flag, run:
+- Integration tests are guarded by a `--run-integration` flag (defined in `tests/conftest.py`) and require MLflow models in `mlruns/`.
+- Run:
   ```bash
   pytest tests/ -v                   # fast checks
   pytest tests/ -v --run-integration # requires MLflow models present in mlruns/
