@@ -33,14 +33,18 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY main.py run.py ./
+COPY main.py ./
 COPY prediction_model ./prediction_model
 
 # Create startup script to sync MLflow data from S3
 RUN echo '#!/bin/bash\n\
 set -e\n\
 echo "Syncing MLflow tracking data from S3..."\n\
-aws s3 sync s3://loanpred-mlops-20251118-120330/mlruns/ /app/mlruns/ || echo "Warning: Could not sync from S3, using local mlruns"\n\
+if [ -n "$S3_BUCKET" ]; then\n\
+    aws s3 sync s3://${S3_BUCKET}/mlruns/ /app/mlruns/ || echo "Warning: Could not sync from S3, using local mlruns"\n\
+else\n\
+    echo "S3_BUCKET not set, using local mlruns"\n\
+fi\n\
 echo "Starting FastAPI application..."\n\
 exec python main.py' > /app/start.sh \
     && chmod +x /app/start.sh

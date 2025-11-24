@@ -5,6 +5,7 @@ API endpoint tests
 import pytest
 from fastapi import status
 import io
+from tests.conftest import RUN_INTEGRATION
 
 
 class TestHealthEndpoint:
@@ -65,7 +66,7 @@ class TestMetricsEndpoint:
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured (use --run-integration to run)"
 )
 class TestPredictionEndpoint:
@@ -113,7 +114,7 @@ class TestPredictionEndpoint:
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured (use --run-integration to run)"
 )
 class TestBatchPredictionEndpoint:
@@ -151,7 +152,7 @@ class TestBatchPredictionEndpoint:
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured"
 )
 class TestModelInfoEndpoint:
@@ -176,7 +177,7 @@ class TestModelInfoEndpoint:
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured"
 )
 class TestListModelsEndpoint:
@@ -191,14 +192,3 @@ class TestListModelsEndpoint:
             assert "total_versions" in data
             assert "models" in data
             assert isinstance(data["models"], list)
-
-
-# Pytest configuration hook
-def pytest_addoption(parser):
-    """Add custom pytest command line options"""
-    parser.addoption(
-        "--run-integration",
-        action="store_true",
-        default=False,
-        help="Run integration tests that require MLflow"
-    )

@@ -5,10 +5,11 @@ Prediction logic tests
 import pytest
 import pandas as pd
 import numpy as np
+from tests.conftest import RUN_INTEGRATION
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured (use --run-integration to run)"
 )
 class TestModelLoader:
@@ -60,7 +61,7 @@ class TestModelLoader:
 
 
 @pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration", default=False),
+    not RUN_INTEGRATION,
     reason="Requires MLflow to be configured"
 )
 class TestGeneratePredictions:

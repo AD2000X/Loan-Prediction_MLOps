@@ -75,7 +75,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest test/test_mlops.py -v --tb=short
+          pytest tests/ -v --tb=short
 
       - name: Sync Model Registry from S3 before training
         run: |

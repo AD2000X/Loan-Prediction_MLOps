@@ -10,7 +10,7 @@ DATAPATH = PROJECT_ROOT / "datasets"
 # MLflow Tracking Configuration
 # Note: MLflow tracking backend must be file:// or database URI (not S3)
 # S3 is used only for artifact storage
-S3_BUCKET = "loanpred-mlops-20251118-120330"
+S3_BUCKET = os.getenv("S3_BUCKET", "loanpred-mlops-20251118-120330")
 MLRUNS_PATH = PROJECT_ROOT / "mlruns"
 
 # Always use local file-based tracking URI with relative path for portability
@@ -70,7 +70,7 @@ FOLDER = "datadrift"
 
 # MLflow experiment configuration
 EXPERIMENT_NAME = "loan_prediction_model"
-MODEL_NAME = "/Loanprediction-model"
+MODEL_NAME = "LoanPrediction"
 
 # Model performance thresholds for quality gates
 MIN_F1_SCORE = 0.85

@@ -6,6 +6,23 @@ import pytest
 import pandas as pd
 from fastapi.testclient import TestClient
 
+# Flag controlled by --run-integration CLI option
+RUN_INTEGRATION = False
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="Run integration tests that require MLflow models",
+    )
+
+
+def pytest_configure(config):
+    global RUN_INTEGRATION
+    RUN_INTEGRATION = config.getoption("--run-integration")
+
 
 @pytest.fixture
 def sample_loan_data():

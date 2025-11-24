@@ -61,11 +61,21 @@ class ModeImputer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         """
         Learns the mode for each specified variable from the training data.
+        Handles edge cases where columns may be all NaN.
         :param X: Training data (pandas DataFrame).
         :return: self
         """
         # Calculate the mode (most frequent value) for each variable
-        self.mode_dict = {col: X[col].mode(dropna=True)[0] for col in self.variables}
+        self.mode_dict = {}
+        for col in self.variables:
+            mode_values = X[col].mode(dropna=True)
+            # Handle case where column is all NaN (mode returns empty Series)
+            if len(mode_values) > 0:
+                self.mode_dict[col] = mode_values[0]
+            else:
+                # Use None as fallback for all-NaN columns
+                # In transform, these will remain NaN
+                self.mode_dict[col] = None
         return self
 
     def transform(self, X):
@@ -76,7 +86,9 @@ class ModeImputer(BaseEstimator, TransformerMixin):
         """
         X = X.copy()
         for col in self.variables:
-            X[col].fillna(self.mode_dict[col], inplace=True)
+            # Only fill if mode_dict has a valid value (not None)
+            if self.mode_dict[col] is not None:
+                X[col].fillna(self.mode_dict[col], inplace=True)
         if self._transform_output == "numpy":
             return X.to_numpy()
         return X
@@ -240,13 +252,15 @@ class LogTransforms(BaseEstimator, TransformerMixin):
     def transform(self, X):
         """
         Applies the natural logarithm transformation to the input data.
-        Note: Assumes all values are > 0 to avoid log(0) or log(negative).
+        Uses log1p(x) = log(1+x) to handle zero values safely.
         :param X: Data to transform (pandas DataFrame).
         :return: Transformed data (pandas DataFrame or numpy array).
         """
         X = X.copy()
         for col in self.variables:
-            X[col] = np.log(X[col])
+            # Use log1p to safely handle zero values
+            # This computes log(1 + x), so log1p(0) = 0
+            X[col] = np.log1p(X[col])
         if self._transform_output == "numpy":
             return X.to_numpy()
         return X

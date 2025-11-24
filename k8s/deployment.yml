@@ -63,6 +63,8 @@ spec:
           value: "file:/app/mlruns"
         - name: AWS_DEFAULT_REGION
           value: "eu-west-2"
+        - name: S3_BUCKET
+          value: "loanpred-mlops-20251118-120330"
 
         # Resource limits to prevent OOM and ensure QoS
         # Why: Prevents pods from consuming excessive resources and enables

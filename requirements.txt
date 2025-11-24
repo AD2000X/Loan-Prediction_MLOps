@@ -16,6 +16,7 @@ gunicorn==21.2.0
 python-multipart==0.0.9
 streamlit==1.38.0
 requests==2.31.0
+httpx==0.24.1
 
 # Hyperparameter optimization
 hyperopt==0.2.7
