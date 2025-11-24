@@ -1,0 +1,147 @@
+---
+groups:
+  - name: ml_model_performance
+    interval: 30s
+    rules:
+      # Model Quality Alerts
+      - alert: ModelF1ScoreLow
+        expr: model_f1_score{model_stage="Production"} < 0.85
+        for: 5m
+        labels:
+          severity: critical
+          component: ml_model
+        annotations:
+          summary: "Production model F1 score below threshold"
+          description: >-
+            F1 score is {{ $value | humanize }} (threshold: 0.85)
+
+      - alert: ModelAccuracyLow
+        expr: model_accuracy{model_stage="Production"} < 0.80
+        for: 5m
+        labels:
+          severity: warning
+          component: ml_model
+        annotations:
+          summary: "Production model accuracy below threshold"
+          description: >-
+            Accuracy is {{ $value | humanize }} (threshold: 0.80)
+
+      # Performance Alerts
+      - alert: HighPredictionLatency
+        expr: >-
+          histogram_quantile(0.95,
+          rate(model_prediction_latency_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High prediction latency detected"
+          description: >-
+            P95 latency is {{ $value | humanize }}s (threshold: 0.5s)
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(model_prediction_errors_total[5m]) /
+            rate(model_predictions_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High prediction error rate"
+          description: >-
+            Error rate is {{ $value | humanizePercentage }}
+            (threshold: 5%)
+
+      - alert: NoTrafficReceived
+        expr: rate(model_predictions_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "No prediction traffic received"
+          description: >-
+            API has received no prediction requests
+            in the last 5 minutes
+
+      # Blue-Green Deployment Alerts
+      - alert: BlueGreenHealthCheckFailed
+        expr: up{job="loan-prediction"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: deployment
+        annotations:
+          summary: "Health check failed on {{ $labels.instance }}"
+          description: "Pod {{ $labels.pod }} is not healthy"
+
+      - alert: CanaryErrorRateHigh
+        expr: |
+          (
+            rate(model_prediction_errors_total{version="canary"}[5m]) /
+            rate(model_predictions_total{version="canary"}[5m])
+          ) > (
+            rate(model_prediction_errors_total{version="stable"}[5m]) /
+            rate(model_predictions_total{version="stable"}[5m])
+          ) * 2
+        for: 5m
+        labels:
+          severity: critical
+          component: canary
+        annotations:
+          summary: "Canary error rate significantly higher than stable"
+          description: "Canary errors: {{ $value | humanizePercentage }}"
+
+      # Resource Alerts
+      - alert: HighMemoryUsage
+        expr: >-
+          container_memory_usage_bytes{pod=~"loan-prediction.*"}
+          / container_spec_memory_limit_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage on {{ $labels.pod }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: HighCPUUsage
+        expr: >-
+          rate(container_cpu_usage_seconds_total{
+          pod=~"loan-prediction.*"}[5m])
+          / container_spec_cpu_quota > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.pod }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+  - name: ml_model_drift
+    interval: 1h
+    rules:
+      # Data Drift Alerts (would integrate with Evidently)
+      - alert: DataDriftDetected
+        expr: evidently_data_drift_score > 0.7
+        for: 10m
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "Data drift detected"
+          description: "Drift score is {{ $value | humanize }} (threshold: 0.7)"
+
+      - alert: FeatureDriftDetected
+        expr: evidently_feature_drift_count > 3
+        for: 10m
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "Multiple features drifting"
+          description: "{{ $value }} features showing significant drift"

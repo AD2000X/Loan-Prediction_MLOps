@@ -1,0 +1,25 @@
+# Internal service for loan prediction API
+# Accessible only within the cluster (VPC internal)
+# Why: ClusterIP provides internal access without needing internet-facing
+# LoadBalancer configuration, simplifying deployment and reducing AWS costs
+apiVersion: v1
+kind: Service
+metadata:
+  name: loan-prediction-service
+  namespace: loan-prediction-mlops
+  labels:
+    app: loan-prediction
+spec:
+  # ClusterIP for internal access only
+  # Why: No external traffic requirements currently, and internal access
+  # is sufficient for CI/CD health checks via kubectl exec
+  type: ClusterIP
+
+  selector:
+    app: loan-prediction
+
+  ports:
+  - name: http
+    port: 8005
+    targetPort: 8005
+    protocol: TCP

@@ -1,0 +1,99 @@
+# Rolling update deployment for loan prediction model
+# Uses Kubernetes native zero-downtime updates with health checks
+# Why: Kubernetes rolling updates provide production-grade deployment without
+# the complexity of blue-green deployment scripts, while maintaining zero downtime
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-prediction-deployment
+  namespace: loan-prediction-mlops
+  labels:
+    app: loan-prediction
+    managed-by: ci-cd
+spec:
+  # High availability with 3 replicas
+  # Why: Ensures service availability during pod failures and updates
+  replicas: 3
+
+  # Rolling update strategy to minimize downtime
+  # Why: maxSurge=1 allows one extra pod during updates for capacity
+  # maxUnavailable=0 ensures all 3 pods always available for traffic
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: loan-prediction
+
+  template:
+    metadata:
+      labels:
+        app: loan-prediction
+      annotations:
+        # Prometheus scraping configuration for monitoring
+        # Why: Enables automatic metrics collection without manual configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8005"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      serviceAccountName: loan-prediction-sa
+
+      containers:
+      - name: loan-prediction
+        # Use actual ECR registry ID for this AWS account
+        image: 513348493761.dkr.ecr.eu-west-2.amazonaws.com/mlops/loan_pred:latest
+        imagePullPolicy: Always
+
+        ports:
+        - containerPort: 8005
+          name: http
+          protocol: TCP
+
+        # Environment configuration for model loading and AWS access
+        # Why: MLFLOW_TRACKING_URI must use file:// because S3 is not supported
+        # as a backend store (only for artifacts)
+        env:
+        - name: MODEL_STAGE
+          value: "Production"
+        - name: MLFLOW_TRACKING_URI
+          value: "file:/app/mlruns"
+        - name: AWS_DEFAULT_REGION
+          value: "eu-west-2"
+
+        # Resource limits to prevent OOM and ensure QoS
+        # Why: Prevents pods from consuming excessive resources and enables
+        # Kubernetes to make better scheduling decisions
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+        # Liveness probe to restart unhealthy pods
+        # Why: Detects and recovers from application deadlocks or hangs
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness probe to control traffic routing
+        # Why: Prevents traffic from reaching pods that are not yet ready
+        # or temporarily unhealthy during rolling updates
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2

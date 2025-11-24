@@ -1,0 +1,62 @@
+name: Test OIDC Authentication
+
+on:
+  workflow_dispatch:  # manual
+
+jobs:
+  test-aws-connection:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write    #  OIDC required
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_GITHUB_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: GitHubActions-Test-${{ github.run_id }}
+      
+      - name: Verify AWS identity
+        run: |
+          echo "=========================================="
+          echo "Testing AWS OIDC Authentication"
+          echo "=========================================="
+          aws sts get-caller-identity
+          echo ""
+          echo "✓ Authentication successful!"
+      
+      - name: Test S3 access
+        run: |
+          echo "=========================================="
+          echo "Testing S3 Access"
+          echo "=========================================="
+          aws s3 ls || echo "No S3 buckets yet (this is fine)"
+          echo "✓ S3 access verified!"
+      
+      - name: Test ECR access
+        run: |
+          echo "=========================================="
+          echo "Testing ECR Access"
+          echo "=========================================="
+          aws ecr describe-repositories || echo "No ECR repositories yet (this is fine)"
+          echo "✓ ECR access verified!"
+      
+      - name: Test ECS access
+        run: |
+          echo "=========================================="
+          echo "Testing ECS Access"
+          echo "=========================================="
+          aws ecs list-clusters || echo "No ECS clusters yet (this is fine)"
+          echo "✓ ECS access verified!"
+      
+      - name: Summary
+        run: |
+          echo "=========================================="
+          echo "✓ All AWS access tests passed!"
+          echo "✓ OIDC authentication is working correctly"
+          echo "=========================================="

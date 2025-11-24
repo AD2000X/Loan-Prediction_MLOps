@@ -1,0 +1,126 @@
+{
+  "dashboard": {
+    "title": "ML Model Performance Dashboard",
+    "tags": ["mlops", "model-monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Model F1 Score",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "model_f1_score{model_stage=\"Production\"}",
+            "legendFormat": "F1 Score"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "options": {
+          "min": 0,
+          "max": 1,
+          "thresholds": [
+            {"value": 0, "color": "red"},
+            {"value": 0.75, "color": "yellow"},
+            {"value": 0.85, "color": "green"}
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "Model Accuracy",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "model_accuracy{model_stage=\"Production\"}",
+            "legendFormat": "Accuracy"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Predictions per Minute",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(model_predictions_total[1m])",
+            "legendFormat": "{{model_version}} - {{result}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Prediction Latency (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m]))",
+            "legendFormat": "P95 - {{model_version}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yaxes": [
+          {"format": "s", "label": "Latency"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(model_prediction_errors_total[5m]) / rate(model_predictions_total[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yaxes": [
+          {"format": "percentunit", "label": "Error Rate"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Prediction Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by(result) (model_predictions_total)",
+            "legendFormat": "{{result}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Model Metrics Comparison",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "model_f1_score",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "model_accuracy",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "model_recall",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "model_precision",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 16}
+      }
+    ],
+    "refresh": "30s",
+    "time": {"from": "now-1h", "to": "now"}
+  }
+}

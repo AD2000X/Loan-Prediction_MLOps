@@ -1,0 +1,8 @@
+# Drift Monitoring Streamlit App Requirements
+# Updated for Python 3.11 compatibility on Streamlit Cloud
+
+streamlit==1.40.0
+evidently==0.4.40
+pandas==2.2.3
+numpy==2.0.0
+boto3==1.35.90
