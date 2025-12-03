@@ -3,38 +3,27 @@
 Prometheus collects and stores metrics from the loan prediction service.
 
 ## Configuration
-- Deployment: Kubernetes (monitoring namespace)
-- Scrape Interval: 15s
-- Retention: 15 days
+- Deployment: docker-compose in `monitoring/`
+- Scrape target (default dev): `host.docker.internal:8005` on `/metrics`
+- Scrape Interval: 10s (loan-prediction local job)
+- Retention: default Prometheus settings (not overridden)
 
-## Metrics Collected
-
-### Model Performance Metrics
-- model_f1_score{model_version, model_type, model_stage}
-- model_accuracy{model_version, model_type, model_stage}
-- model_recall{model_version, model_type, model_stage}
-- model_precision{model_version, model_type, model_stage}
-
-### Prediction Metrics
-- model_predictions_total{model_version, model_type, model_stage, result}
-- model_prediction_latency_seconds_bucket{model_version, model_type}
-- model_prediction_errors_total{error_type, model_version}
-
-### System Metrics
-- HTTP request metrics (via prometheus_fastapi_instrumentator)
-- Container metrics (CPU, memory)
-- Pod health status
+## Metrics Collected (from app)
+- http_* metrics from prometheus_fastapi_instrumentator
+- model_predictions_total{model_version, model_type, prediction, stage}
+- prediction_batch_size (gauge)
+- s3_upload_total{status}
 
 ## Alert Rules
 Location: prometheus/rules/model-alerts.yml
 
 Critical Alerts:
-- Model F1 score < 0.85
-- Error rate > 5%
+- Model F1 score < 0.85 (note: requires model_f1_score metric, not emitted by current app)
+- Error rate > 5% (requires model_prediction_errors_total metric, not emitted)
 - Health check failed
 
 Warning Alerts:
-- High prediction latency > 0.5s
+- High prediction latency > 0.5s (requires latency histogram, not emitted)
 - No traffic for 5 minutes
 - High memory/CPU usage > 85%
 
@@ -47,9 +36,9 @@ Warning Alerts:
 # Predictions per second
 rate(model_predictions_total[1m])
 
-# P95 latency
-histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m]))
+# Requests per second
+rate(http_requests_total[1m])
 
-# Error rate
-rate(model_prediction_errors_total[5m]) / rate(model_predictions_total[5m])
+# Batch size gauge
+prediction_batch_size
 ```

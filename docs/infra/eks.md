@@ -14,8 +14,7 @@ Amazon Elastic Kubernetes Service hosts the loan prediction ML service.
 - Autoscaling: Enabled
 
 ## Deployment Strategy
-- Blue-Green: Zero-downtime deployments
-- Canary: Progressive rollout (10% → 100%)
+- Rolling update (maxSurge=1, maxUnavailable=0)
 - Replicas: 3 pods per deployment
 
 ## Namespace

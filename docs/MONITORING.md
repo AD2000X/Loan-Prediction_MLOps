@@ -30,10 +30,9 @@ export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_DEFAULT_REGION=eu-west-2
 ```
 
-**Step 2: Start MLflow UI with S3 backend**
+**Step 2: Start MLflow UI (local file store)**
 ```bash
-# Using S3 artifact store
-mlflow ui --backend-store-uri s3://loanpred-mlops-20251118-120330/mlruns --host 0.0.0.0 --port 5000
+mlflow ui --backend-store-uri ./mlruns --host 0.0.0.0 --port 5000
 ```
 
 **Step 3: Access MLflow UI**
@@ -54,9 +53,8 @@ Open browser: http://localhost:5000
 import mlflow
 import os
 
-# Set tracking URI
-os.environ['AWS_DEFAULT_REGION'] = 'eu-west-2'
-mlflow.set_tracking_uri('s3://loanpred-mlops-20251118-120330/mlruns')
+# Set tracking URI (local default)
+mlflow.set_tracking_uri('./mlruns')
 
 # List all experiments
 experiments = mlflow.search_experiments()
@@ -133,17 +131,14 @@ Open browser: http://localhost:9090
 # Request rate
 rate(http_requests_total[5m])
 
-# Prediction latency P95
-histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m]))
+# HTTP request rate
+rate(http_requests_total[5m])
 
-# Error rate
-rate(model_prediction_errors_total[5m]) / rate(model_predictions_total[5m])
+# Model prediction counts
+rate(model_predictions_total[5m])
 
-# Memory usage
-container_memory_usage_bytes{pod=~"loan-prediction.*"} / container_spec_memory_limit_bytes
-
-# CPU usage
-rate(container_cpu_usage_seconds_total{pod=~"loan-prediction.*"}[5m])
+# Batch sizes (gauge)
+prediction_batch_size
 ```
 
 ### Option 2: Query Metrics Directly from Pods
@@ -159,15 +154,17 @@ kubectl exec $POD -n loan-prediction-mlops -- curl -s http://localhost:8005/metr
 
 **Example output:**
 ```
-# HELP loan_predictions_total Total number of loan predictions made
-# TYPE loan_predictions_total counter
-loan_predictions_total{model_stage="Production"} 1523.0
+# HELP model_predictions_total Total number of predictions made
+# TYPE model_predictions_total counter
+model_predictions_total{model_version="1",model_type="XGBoost",prediction="Y",stage="Production"} 25.0
 
-# HELP model_prediction_latency_seconds Prediction latency in seconds
-# TYPE model_prediction_latency_seconds histogram
-model_prediction_latency_seconds_bucket{le="0.005"} 856.0
-model_prediction_latency_seconds_bucket{le="0.01"} 1203.0
-...
+# HELP prediction_batch_size Number of samples in batch prediction
+# TYPE prediction_batch_size gauge
+prediction_batch_size 10
+
+# HELP s3_upload_total Total S3 upload operations
+# TYPE s3_upload_total counter
+s3_upload_total{status="success"} 3.0
 ```
 
 ### Option 3: Port Forward to Pod for Live Metrics
@@ -317,28 +314,21 @@ kubectl port-forward -n loan-prediction-mlops $POD 8005:8005
 
 **Query model info endpoint:**
 ```bash
-curl http://localhost:8005/model/info | jq
+curl "http://localhost:8005/model_info?stage=Production" | jq
 ```
 
 **Example response:**
 ```json
 {
-  "model_name": "XGBoost",
-  "model_stage": "Production",
-  "model_version": "1",
-  "metrics": {
-    "f1_score": 0.8745,
-    "accuracy": 0.8892,
-    "precision": 0.8654,
-    "recall": 0.8842,
-    "roc_auc": 0.9123
-  },
-  "fairness": {
-    "demographic_parity_difference": 0.0234,
-    "equalized_odds_difference": 0.0156
-  },
-  "training_date": "2025-01-20T10:30:45Z",
-  "mlflow_run_id": "abc123def456"
+  "version": "1",
+  "stage": "Production",
+  "model_type": "XGBoost",
+  "f1_score": 0.8745,
+  "accuracy": 0.8892,
+  "recall": 0.8842,
+  "precision": 0.8654,
+  "run_id": "abc123def456",
+  "description": "XGBoost model trained with hyperparameter optimization"
 }
 ```
 
@@ -437,7 +427,7 @@ Returns model metadata and metrics.
 ### Make Prediction
 
 ```bash
-curl -X POST http://localhost:8005/predict \
+curl -X POST http://localhost:8005/prediction_api \
   -H "Content-Type: application/json" \
   -d '{
     "Gender": "Male",
@@ -458,9 +448,10 @@ Response:
 ```json
 {
   "prediction": "Y",
-  "probability": 0.8745,
   "model_version": "1",
-  "prediction_time_ms": 45
+  "model_type": "XGBoost",
+  "model_stage": "Production",
+  "timestamp": "2024-11-17T12:00:00.000000"
 }
 ```
 

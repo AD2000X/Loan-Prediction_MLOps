@@ -205,21 +205,21 @@ Local Development          GitHub Actions            AWS Cloud
       |                         |                        |
    [Code + Data]           [CI/CD Pipeline]         [Storage + Deploy]
       |                         |                        |
-   git push     ——————>    Trigger workflow              |
+   git push ------------------->|                        |
       |                         |                        |
-   dvc push     ——————————————————————————————>     S3 Bucket
+   dvc push ------------------->|                        |--> S3 Bucket (data/mlruns)
       |                         |                        |
-      |                    dvc pull    <————————————————|
+      |                    dvc pull -------------------->|
       |                         |                        |
       |                   Train Models                   |
       |                         |                        |
-      |                   mlflow sync  ——————————————>   |
+      |             Sync mlruns to S3 ------------------>|
       |                         |                        |
       |                  Docker build                    |
       |                         |                        |
-      |                   Push to ECR  ——————————————>   |
+      |               Push image to ECR ---------------->|
       |                         |                        |
-      |                  Deploy to EKS ——————————————>   |
+      |               Deploy image to EKS -------------->|
 ```
 
 ---

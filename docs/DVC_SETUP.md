@@ -70,13 +70,13 @@ The GitHub Actions workflow automatically:
    - Builds and deploys Docker image
 
 2. **Data Sync Flow**:
-   ```
-   GitHub Actions
-   ├── DVC Pull (download datasets from S3)
-   ├── Train Models
-   ├── Sync MLflow to S3
-   └── Deploy to EKS
-   ```
+```
+GitHub Actions
+    dvc pull (download datasets from S3)
+    train models
+    sync mlruns to s3://loanpred-mlops-20251118-120330/mlruns/
+    deploy to EKS
+```
 
 ## AWS Credentials
 
@@ -99,17 +99,17 @@ aws configure
 ## File Structure
 
 ```
-.
-├── datasets/                    # Actual data (gitignored)
-│   ├── train.csv
-│   ├── test.csv
-│   └── sample_submission.csv
-├── datasets.dvc                 # DVC metadata (tracked in git)
-├── .dvc/
-│   ├── config                   # DVC configuration
-│   └── .gitignore
-└── .dvcignore                   # Files to ignore in DVC
+project_root/
+  datasets/               # Actual data (gitignored)
+    train.csv
+    test.csv
+  datasets.dvc            # DVC metadata (tracked in git)
+  .dvc/                   # DVC configuration
+    config
+    .gitignore
+  .dvcignore              # DVC ignore list
 ```
+
 
 ## Common Commands
 

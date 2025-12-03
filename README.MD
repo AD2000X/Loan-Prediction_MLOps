@@ -70,8 +70,8 @@ cp .env.example .env
 # MODEL_STAGE=Production                # Which stage the API serves
 # API_PORT=8005
 # AWS_REGION=eu-west-2
-# S3_BUCKET_NAME=loanpred-mlops-20251118-120330   # default in configs/DVC/Dockerfile
-# DVC_REMOTE=s3://loanpred-mlops-20251118-120330/datasets
+# S3_BUCKET=loanpred-mlops-20251118-120330        # default in configs/DVC/Dockerfile
+# DVC_REMOTE=s3://loanpred-mlops-20251118-120330
 # DRIFT_S3_BUCKET=loanpred-mlops-20251118-120330
 ```
 
@@ -108,6 +108,7 @@ Environment notes:
 - Ensure `mlruns/` contains a trained model (train locally or sync from S3).
 - `MODEL_STAGE` controls which stage to load (`Production` default).
 - Metrics are exposed at `/metrics` for Prometheus scraping.
+Note: Inputs are parsed directly into pandas without Pydantic validation; ensure the JSON matches expected feature names and types.
 
 ### Example requests
 
@@ -202,6 +203,7 @@ Tests live in `tests/`:
   pytest tests/ -v                   # fast checks
   pytest tests/ -v --run-integration # requires MLflow models present in mlruns/
   ```
+If you see `Client.__init__() got an unexpected keyword argument 'app'`, reinstall the pinned HTTPX version: `pip install httpx==0.24.1`. If collection fails on `pytest.config`, update the test skip logic to use `request.config.getoption("--run-integration")` or the `RUN_INTEGRATION` flag from `tests/conftest.py`.
 
 ## Documentation
 

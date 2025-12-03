@@ -87,8 +87,8 @@ pip install -r requirements-dev.txt
 ### 4. Configure DVC (Pull Data)
 
 ```bash
-# Configure DVC remote (S3)
-dvc remote add -d s3remote s3://your-bucket-name/datasets
+# Remote already configured as "myremote" -> s3://loanpred-mlops-20251118-120330 (see .dvc/config)
+# If you add a new remote, keep the name "myremote" to match CI/CD.
 
 # Pull data
 dvc pull
@@ -102,35 +102,20 @@ dvc pull
 
 MLflow is used for experiment tracking and model registry.
 
-### Local MLflow Server
+### Default (file-based tracking)
+- Code defaults to `MLFLOW_TRACKING_URI=./mlruns` (local file store).
+- Artifacts remain local unless you manually sync `mlruns/` to S3.
 
-1. **Start MLflow Server**
-   ```bash
-   mlflow server \
-     --backend-store-uri sqlite:///mlflow.db \
-     --default-artifact-root ./mlruns \
-     --host 0.0.0.0 \
-     --port 5000
-   ```
-
-2. **Set Environment Variable**
-   ```bash
-   export MLFLOW_TRACKING_URI="http://localhost:5000"
-   ```
-
-3. **Access MLflow UI**
-   - Open browser: http://localhost:5000
-
-### Verify MLflow Connection
-
-```python
-import mlflow
-
-print(f"Tracking URI: {mlflow.get_tracking_uri()}")
-
-# Test creating experiment
-mlflow.set_experiment("test-experiment")
+### Optional: run a local MLflow server
+```bash
+mlflow server \
+  --backend-store-uri sqlite:///mlflow.db \
+  --default-artifact-root ./mlruns \
+  --host 0.0.0.0 \
+  --port 5000
+export MLFLOW_TRACKING_URI="http://localhost:5000"
 ```
+Open http://localhost:5000 to view runs.
 
 ---
 
@@ -237,7 +222,7 @@ For CI/CD GitHub Actions.
 
 | Secret Name | Value | Description |
 |-------------|-------|-------------|
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow Tracking URI |
+| `MLFLOW_TRACKING_URI` | `./mlruns` or your MLflow server URL | MLflow Tracking URI |
 
 ### 4. Configure OIDC (GitHub → AWS)
 
@@ -377,15 +362,15 @@ Create `.env` file (do not commit to Git):
 
 ```bash
 # MLflow
-export MLFLOW_TRACKING_URI="http://localhost:5000"
+export MLFLOW_TRACKING_URI="./mlruns"
 
 # AWS
 export AWS_REGION="eu-west-2"
 export AWS_DEFAULT_REGION="eu-west-2"
-export S3_BUCKET_NAME="loanpred-mlops-demo-1234567890"
+export S3_BUCKET="loanpred-mlops-20251118-120330"
 
 # DVC
-export DVC_REMOTE="s3://loanpred-mlops-demo-1234567890/datasets"
+export DVC_REMOTE="s3://loanpred-mlops-20251118-120330"
 
 # API
 export MODEL_STAGE="Production"  # or "Staging"
@@ -441,12 +426,10 @@ aws s3 ls s3://your-bucket-name/datasets/
 
 - Read [API Documentation](API.md)
 - Read [Monitoring Documentation](MONITORING.md)
-- View [Deployment Guide](DEPLOYMENT.md)
 
 ---
 
 ## Support
 
 Having issues?
-- Check [Troubleshooting Guide](TROUBLESHOOTING.md)
-- Submit GitHub Issue
+- Submit a GitHub Issue

@@ -3,9 +3,8 @@
 Grafana provides visualization and dashboarding for ML model monitoring.
 
 ## Configuration
-- Deployment: Kubernetes (monitoring namespace)
-- Data Source: Prometheus
-- Port: 3000
+- Deployment: docker-compose in `monitoring/` (Grafana on port 3000:3000)
+- Data Source: Prometheus (from `monitoring/prometheus/prometheus.yml`)
 
 ## Dashboards
 
@@ -16,20 +15,17 @@ Panels:
 - Model F1 Score (gauge)
 - Model Accuracy (gauge)
 - Predictions per Minute (graph)
-- Prediction Latency P95 (graph)
-- Error Rate (graph)
 - Prediction Distribution (pie chart)
 - Model Metrics Comparison (table)
 
 ### Key Metrics Monitored
-- model_f1_score
-- model_accuracy
-- model_prediction_latency_seconds
 - model_predictions_total
-- model_prediction_errors_total
+- prediction_batch_size
+- s3_upload_total
+- http_* metrics from prometheus_fastapi_instrumentator
 
 ## Access
-Port-forward: kubectl port-forward -n monitoring svc/grafana 3000:80
+- Local compose: http://localhost:3000 (admin/admin by default)
 
 ## Alert Integration
-Grafana connects to Prometheus Alertmanager for alert notifications.
+Grafana can connect to Prometheus Alertmanager if configured (not provisioned in this repo).

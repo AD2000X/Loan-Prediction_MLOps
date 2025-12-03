@@ -55,7 +55,7 @@ graph TB
 
 4. **Run Tests**
    ```bash
-   pytest test/test_mlops.py -v
+   pytest tests/ -v
    ```
 
 5. **Model Training**
@@ -73,7 +73,7 @@ graph TB
    - Push DVC changes (if any)
 
 7. **Docker Build & Push**
-   - Build Docker image with trained models
+   - Build Docker image (models are loaded at runtime via S3 sync)
    - Tag: `<ECR_REGISTRY>/mlops/loan_pred:<COMMIT_SHA>`
    - Push to Amazon ECR
 
@@ -131,33 +131,35 @@ graph TB
 ### Training Data
 ```
 Local Development
-    ├── datasets/ (gitignored)
-    ├── datasets.dvc (tracked in git)
-    └── dvc push
-         ↓
+    - datasets/ (gitignored)
+    - datasets.dvc (tracked in git)
+           |
+        dvc push
+           |
     S3: s3://loanpred-mlops-20251118-120330/.dvc/
-         ↓
+           |
 GitHub Actions
-    └── dvc pull
-         ↓
+           |
+        dvc pull
+           |
     Training Pipeline
 ```
 
 ### Model Artifacts
 ```
 Training Pipeline
-    ├── mlruns/ (local)
-    └── MLflow logging
-         ↓
-    aws s3 sync
-         ↓
+    - mlruns/ (local)
+    - MLflow logging
+           |
+        aws s3 sync
+           |
     S3: s3://loanpred-mlops-20251118-120330/mlruns/
-         ↓
+           |
 Docker Image
-    └── Packaged with models
-         ↓
+    - Code + runtime model sync
+           |
     Amazon ECR
-         ↓
+           |
     EKS Deployment
 ```
 
